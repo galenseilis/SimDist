@@ -5,7 +5,9 @@ description = "Probability distributions for simulations in Python."
 authors = [
     {name = "galenseilis", email = "galen.seilis@seilis.ca"},
 ]
-dependencies = []
+dependencies = [
+    "numpy>=2.1.2",
+]
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "Apache-2.0"}
