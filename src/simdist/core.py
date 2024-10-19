@@ -71,8 +71,8 @@ class Distribution(ABC):
             iter(other)
             if all(isinstance(d, Distribution) for d in other):
                 return Compose(self.__class__, other)
-        except ValueError as ve:
-            pass
+        except ValueError as value_error:
+            print(value_error)
 
         if callable(other):
             return Transform((self,), other)
@@ -273,7 +273,7 @@ class Compose(Distribution):
 
     def sample(self, context=None):
         """Composite sampling."""
-        return dist_cls(*[dist.sample(context) for dist in self.dists]).sample(context)
+        return self.dist_cls(*[dist.sample(context) for dist in self.dists]).sample(context)
 
 
 class Min(Distribution):
@@ -331,10 +331,13 @@ def is_negative(candidate: float, context=None) -> bool:  # pylint: disable=W061
     return False
 
 
-def outside_interval(candidate, lower=0, upper=float("inf"), context=None) -> bool:
-    """Truncate candidates to an interval."""
+def outside_interval(candidate, lower=0, upper=float("inf"), context=None) -> bool: # pylint: disable=W0613
+    """Truncate candidates to an interval.
+
+    Ignores context.
+    """
     if candidate < lower:
         return True
-    if candidate > uppwer:
+    if candidate > upper:
         return True
     return False
