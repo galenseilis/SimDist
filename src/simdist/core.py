@@ -4,53 +4,57 @@ from abc import ABC, abstractmethod
 import copy
 import operator
 import numbers
-from typing import Callable
+from typing import Any, Callable, override, Self
 
-import numpy as np
+__all__ = ["Distribution"]
 
 
 class Distribution(ABC):
     """Definition of simulation-compatible distributions."""
 
+    infinite_divisible: bool
+
+    @override
     def __repr__(self):
         return f"{self.__class__.__name__}"
 
     @abstractmethod
-    def sample(self, context=None):
+    def sample(self, context: dict[Any, Any] | None = None) -> Any:
         """Sample from distribution."""
+        ...
 
     def __abs__(self):
         return Transform((self,), operator.abs)
 
-    def __add__(self, other):
+    def __add__(self, other: Self):
         """
         Add two distributions such that sampling is the sum of the samples.
         """
         dist = dist_cast(other)
         return Transform((self, dist), operator.add)
 
-    def __sub__(self, other):
+    def __sub__(self, other: Self):
         """
         Subtract two distributions such that sampling is the difference of the samples.
         """
         dist = dist_cast(other)
         return Transform((self, dist), operator.sub)
 
-    def __mul__(self, other):
+    def __mul__(self, other: Self):
         """
         Multiply two distributions such that sampling is the product of the samples.
         """
         dist = dist_cast(other)
         return Transform((self, dist), operator.mul)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Self):
         """
         Divide two distributions such that sampling is the ratio of the samples.
         """
         dist = dist_cast(other)
         return Transform((self, dist), operator.truediv)
 
-    def __call__(self, other):
+    def __call__(self, other: Self):
         """Overloaded call method.
 
         If `other` is of type `Distribution`, or is an iterable containing
@@ -79,60 +83,67 @@ class Distribution(ABC):
 
         raise ValueError(f"Invalid input {other=}.")
 
-    def pdf(self, x):  # pylint: disable=C0103
+    def pdf(self, x: Any) -> float:  # pylint: disable=C0103
         """Probability density function or
         probability mass function."""
         raise NotImplementedError("Method `pdf` not implemented.")
 
-    def cdf(self, x):  # pylint: disable=C0103
+    def cdf(self, x: Any) -> float:  # pylint: disable=C0103
         """Cumulative distribution function."""
         raise NotImplementedError("Method `cdf` not implemented")
 
-    def quantile(self, p):  # pylint: disable=C0103
+    def quantile(self, p: float) -> Any:  # pylint: disable=C0103
         """Quantile function"""
         raise NotImplementedError("Method `quantile` not implemented.")
 
-    def mean(self):
+    def mean(self) -> float:
         """Expected value."""
         raise NotImplementedError("Method `mean` not implemented")
 
-    def median(self):
+    def median(self) -> Any:
         """Median"""
         raise NotImplementedError("Method `median` not implemented.")
 
-    def mode(self):
+    def mode(self) -> float:
         """Mode"""
         raise NotImplementedError()
 
-    def variance(self):
+    def variance(self) -> float:
         """Variance"""
         raise NotImplementedError()
 
-    def standard_deviation(self):
+    def standard_deviation(self) -> float:
         """Standard deviation"""
         raise NotImplementedError()
 
-    def mean_absolute_deviation(self):
+    def mean_absolute_deviation(self) -> float:
         """Mean absolute deviation (MAD)."""
         raise NotImplementedError()
 
-    def skewness(self):
+    def skewness(self) -> float:
         """Skewness."""
         raise NotImplementedError()
 
-    def excess_kurtosis(self):
+    def excess_kurtosis(self) -> float:
         """Excess kurtosis"""
         raise NotImplementedError()
 
-    def entropy(self):
+    def entropy(self) -> float:
         """Entropy"""
         raise NotImplementedError()
 
-    def moment_generating_function(self, t):  # pylint: disable=C0103
+    def moment_generating_function(self, t: float) -> float:  # pylint: disable=C0103
         """Moment generating function (MGF)."""
         raise NotImplementedError()
 
-    def expected_shortfall(self, p):  # pylint: disable=C0103
+    def fisher_information(self):
+        """Fisher information."""
+
+    def characteristic_function(self, t: float) -> float:
+        """Characteristic function."""
+        raise NotImplementedError()
+
+    def expected_shortfall(self, p: float) -> float:  # pylint: disable=C0103
         """Expected shortfall."""
         raise NotImplementedError()
 
@@ -149,100 +160,6 @@ def dist_cast(obj):
         return Degenerate(func=lambda context: obj)
 
     raise ValueError(f"Could not cast {obj} to type `Distribution`.")
-
-
-class Exponential(Distribution):
-    """Exponential distribution."""
-
-    def __init__(self, rate, rng=None):
-        self.rate = rate
-        self.rng = np.random.default_rng() if rng is None else rng
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(rate={self.rate})"
-
-    def sample(self, context=None):
-        """Sample from distribution."""
-        return self.rng.exponential(1 / self.rate)
-
-    @classmethod
-    def fit(cls, data):
-        """Fit distribution to data."""
-        return Exponential(rate=1 / np.mean(data))
-
-    def pdf(self, x):
-        return self.rate * np.exp(-self.rate * x)
-
-    def cdf(self, x):
-        return 1 - np.exp(-self.rate * x)
-
-    def mean(self):
-        return 1 / self.rate
-
-    def median(self):
-        return np.log(2) / self.rate
-
-    def mode(self):
-        return 0
-
-    def variance(self):
-        return 1 / np.square(self.rate)
-
-    def standard_deviation(self):
-        return 1 / self.rate
-
-    def skewness(self):
-        return 2
-
-    def excess_kurtosis(self):
-        return 6
-
-    def entropy(self):
-        return 1 - np.log(self.rate)
-
-    def moment_generating_function(self, t):  # pylint: disable=C0103
-        if t < self.rate:
-            return self.rate / (self.rate - t)
-
-        raise ValueError("The argument t must be less than the rate.")
-
-    def expected_shortfall(self, p):
-        return -(np.log(1 - p) + 1) / self.rate
-
-
-class ContinuousUniform(Distribution):
-    """Continuous uniform distribution."""
-
-    def __init__(self, lower: float = 0, upper: float = 1, rng=None):
-        self.rng = np.random.default_rng() if rng is None else rng
-        self.lower = lower
-        self.upper = upper
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(lower={self.lower}, upper={self.upper})"
-
-    def sample(self, context=None):
-        """Sample from distribution."""
-        return self.rng.uniform(self.lower, self.upper)
-
-    @classmethod
-    def fit(cls, data):
-        """Fit distribution model."""
-        return ContinuousUniform(lower=min(data), upper=max(data))
-
-
-class Degenerate(Distribution):
-    """Degenerate distribution."""
-
-    def __init__(self, func: Callable):
-        self.func = func
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(self.func)"
-
-    def sample(self, context=None):
-        """Sample from distribution."""
-        return self.func(context)
 
 
 class Transform(Distribution):
@@ -273,7 +190,9 @@ class Compose(Distribution):
 
     def sample(self, context=None):
         """Composite sampling."""
-        return self.dist_cls(*[dist.sample(context) for dist in self.dists]).sample(context)
+        return self.dist_cls(*[dist.sample(context) for dist in self.dists]).sample(
+            context
+        )
 
 
 class Min(Distribution):
@@ -331,7 +250,7 @@ def is_negative(candidate: float, context=None) -> bool:  # pylint: disable=W061
     return False
 
 
-def outside_interval(candidate, lower=0, upper=float("inf"), context=None) -> bool: # pylint: disable=W0613
+def outside_interval(candidate, lower=0, upper=float("inf"), context=None) -> bool:  # pylint: disable=W0613
     """Truncate candidates to an interval.
 
     Ignores context.
