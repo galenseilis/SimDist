@@ -1,12 +1,12 @@
 """Simulation-compatible probability distributions."""
 
 from abc import ABC, abstractmethod
-import copy
 import operator
 import numbers
+from collections.abc import Iterable
 from typing import Any, Callable, override, Self
 
-__all__ = ["Distribution"]
+__all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max"]
 
 
 class Distribution(ABC):
@@ -30,28 +30,28 @@ class Distribution(ABC):
         """
         Add two distributions such that sampling is the sum of the samples.
         """
-        dist = dist_cast(other)
+        dist = _dist_cast(other)
         return Transform((self, dist), operator.add)
 
     def __sub__(self, other: Self):
         """
         Subtract two distributions such that sampling is the difference of the samples.
         """
-        dist = dist_cast(other)
+        dist = _dist_cast(other)
         return Transform((self, dist), operator.sub)
 
     def __mul__(self, other: Self):
         """
         Multiply two distributions such that sampling is the product of the samples.
         """
-        dist = dist_cast(other)
+        dist = _dist_cast(other)
         return Transform((self, dist), operator.mul)
 
     def __truediv__(self, other: Self):
         """
         Divide two distributions such that sampling is the ratio of the samples.
         """
-        dist = dist_cast(other)
+        dist = _dist_cast(other)
         return Transform((self, dist), operator.truediv)
 
     def __call__(self, other: Self):
@@ -148,7 +148,23 @@ class Distribution(ABC):
         raise NotImplementedError()
 
 
-def dist_cast(obj):
+class Degenerate(Distribution):
+    """Degenerate distribution."""
+
+    def __init__(self, func: Callable[[Any], Any]):
+        self.func: Callable[[Any], Any] = func
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.func})"
+
+    @override
+    def sample(self, context: Any | None = None) -> Any:
+        """Sample from distribution."""
+        return self.func(context)
+
+
+def _dist_cast(obj: Any) -> Distribution:
     """Cast object to a distribution."""
     if isinstance(obj, numbers.Number):
         return Degenerate(func=lambda context: obj)
@@ -168,95 +184,59 @@ class Transform(Distribution):
     This implicitly induces a change of variables.
     """
 
-    def __init__(self, dists, transform: Callable):
-        self.dists = copy.deepcopy(dists)
-        self.transform = transform
+    def __init__(
+        self,
+        dists: Iterable[Distribution],
+        transform: Callable[[Iterable[Distribution]], Any],
+    ):
+        self.dists: Iterable[Distribution] = dists
+        self.transform: Callable[[Iterable[Distribution]], Any] = transform
 
+    @override
     def __repr__(self):
         return f"{self.__class__.__name__}({self.dists}, {self.transform})"
 
-    def sample(self, context=None):
+    @override
+    def sample(self, context: Any | None = None) -> Any:
         """Sample from distribution."""
-        samples = [dist.sample(context) for dist in self.dists]
+        samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return self.transform(*samples)
 
 
 class Compose(Distribution):
     """Composite distribution."""
 
-    def __init__(self, dist_cls, dists):
-        self.dist_cls = dist_cls
-        self.dists = dists
+    def __init__(self, dist_cls: Distribution, dists: Iterable[Distribution]):
+        self.dist_cls: Distribution = dist_cls
+        self.dists: Iterable[Distribution] = dists
 
-    def sample(self, context=None):
+    @override
+    def sample(self, context: Any | None = None) -> Any:
         """Composite sampling."""
-        return self.dist_cls(*[dist.sample(context) for dist in self.dists]).sample(
-            context
-        )
+        component_samples: list[Any] = [dist.sample(context) for dist in self.dists]
+        sampled_dist = self.dist_cls(*component_samples)
+        return sampled_dist.sample(context)
 
 
 class Min(Distribution):
     """Distribution takes the minimum of samples from multiple distributions."""
 
-    def __init__(self, dists):
-        self.dists = copy.deepcopy(dists)
+    def __init__(self, dists: Iterable[Distribution]):
+        self.dists: Iterable[Distribution] = dists
 
-    def sample(self, context=None):
-        samples = [dist.sample(context) for dist in self.dists]
+    @override
+    def sample(self, context: Any | None = None) -> Any:
+        samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return min(samples)
 
 
 class Max(Distribution):
     """Distribution takes the maximum of samples from multiple distributions."""
 
-    def __init__(self, dists):
-        self.dists = copy.deepcopy(dists)
+    def __init__(self, dists: Iterable[Distribution]):
+        self.dists: Iterable[Distribution] = dists
 
-    def sample(self, context=None):
-        samples = [dist.sample(context) for dist in self.dists]
+    @override
+    def sample(self, context: Any | None = None) -> None:
+        samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return max(samples)
-
-
-class Reject(Distribution):
-    """Add rejection sampling to a distribution.
-
-    For example, lower truncation of a distribution
-    to zero can restrict a real support distribution to
-    a non-negative real support distribution.
-    """
-
-    def __init__(self, dist: Distribution, reject: Callable):
-        self.dist = dist
-        self.reject = reject
-
-    def __repr__(self):
-        return f"RejectDistribution({self.dist}, {self.reject})"
-
-    def sample(self, context=None):
-        """Rejection sample from distribution."""
-        while True:
-            candidate = self.dist.sample(context)
-            if not self.reject(candidate, context):
-                return candidate
-
-
-def is_negative(candidate: float, context=None) -> bool:  # pylint: disable=W0613
-    """Reject negative candidates.
-
-    Ignores context.
-    """
-    if candidate < 0:
-        return True
-    return False
-
-
-def outside_interval(candidate, lower=0, upper=float("inf"), context=None) -> bool:  # pylint: disable=W0613
-    """Truncate candidates to an interval.
-
-    Ignores context.
-    """
-    if candidate < lower:
-        return True
-    if candidate > upper:
-        return True
-    return False

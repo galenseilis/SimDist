@@ -1,6 +1,6 @@
 [project]
 name = "SimDist"
-version = "0.1.0"
+version = "0.1.1"
 description = "Probability distributions for simulations in Python."
 authors = [
     {name = "galenseilis", email = "galen.seilis@seilis.ca"},

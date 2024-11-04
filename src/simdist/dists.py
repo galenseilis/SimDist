@@ -33,22 +33,6 @@ class ContinuousUniform(Distribution):
         return ContinuousUniform(lower=min(data), upper=max(data))
 
 
-class Degenerate(Distribution):
-    """Degenerate distribution."""
-
-    def __init__(self, func: Callable[[Any], Any]):
-        self.func: Callable[[Any], Any] = func
-
-    @override
-    def __repr__(self):
-        return f"{self.__class__.__name__}(self.func)"
-
-    @override
-    def sample(self, context: Any | None = None) -> Any:
-        """Sample from distribution."""
-        return self.func(context)
-
-
 class Exponential(Distribution):
     """Exponential distribution."""
 
