@@ -1,10 +1,9 @@
-import warnings
+from collections.abc import Iterable
+from typing import Any, override
+
+import numpy as np
 
 from .core import Distribution
-
-from collections.abc import Iterable
-from typing import Any, override, Callable
-import numpy as np
 
 
 class ContinuousUniform(Distribution):
@@ -47,11 +46,6 @@ class Exponential(Distribution):
     @override
     def sample(self, context: Any | None = None):
         """Sample from distribution."""
-        if __debug__:
-            if context is not None:
-                warnings.warn(
-                    f"{self.__class__} does not use `context` but context was passed."
-                )
         return self.rng.exponential(1 / self.rate)
 
     @classmethod
@@ -130,11 +124,6 @@ class Gamma(Distribution):
 
     @override
     def sample(self, context: Any | None = None) -> float:
-        if __debug__:
-            if context is not None:
-                warnings.warn(
-                    f"{self.__class__} does not use `context` but context was passed."
-                )
         return self.rng.gamma(self.shape, self.scale)
 
     def fit(cls, data):
