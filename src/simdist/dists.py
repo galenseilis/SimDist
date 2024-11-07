@@ -1,3 +1,9 @@
+"""Probability distributions."""
+
+##############
+# $0 IMPORTS #
+##############
+
 from collections.abc import Iterable
 from typing import Any, override
 
@@ -5,6 +11,36 @@ import numpy as np
 
 from .core import Distribution
 
+# TODO: Add section comment to distinguish univariate vs multivariate distributions.
+#############################
+# $1 DISCRETE DISTRIBUTIONS #
+#############################
+
+#######################
+# $1.1 FINITE SUPPORT #
+#######################
+
+# TODO: Bernoulli
+# TODO: Rademacher
+# TODO: binomial
+# TODO: beta-binomial
+# TODO: discrete uniform
+# TODO: hypergeometric
+# TODO: negative hypergeometric
+# TODO: Poisson binomial
+# TODO: Fisher's noncentral hypergeometric
+# TODO: Wallenius' noncentral hypergeometric
+# TODO: Benford's law?
+# TODO: ideal soliton
+# TODO: robust soliton
+
+#########################
+# $1.2 INFINITE SUPPORT #
+#########################
+
+##########################################
+# $2 ABSOLUTELY CONTINUOUS DISTRIBUTIONS #
+##########################################
 
 class ContinuousUniform(Distribution):
     """Continuous uniform distribution."""
@@ -12,6 +48,8 @@ class ContinuousUniform(Distribution):
     def __init__(
         self, lower: float = 0, upper: float = 1, rng: np.random.Generator | None = None
     ) -> None:
+        if not (lower <= upper):
+            raise ValueError(f"{lower=} was not lower than {upper=}.")
         self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
         self.lower: float = lower
         self.upper: float = upper
@@ -36,6 +74,8 @@ class Exponential(Distribution):
     """Exponential distribution."""
 
     def __init__(self, rate: float, rng: np.random.Generator | None = None) -> None:
+        if rate <= 0:
+            raise ValueError(f"{rate=} was not greater than zero.")
         self.rate: float = rate
         self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
 
@@ -46,6 +86,7 @@ class Exponential(Distribution):
     @override
     def sample(self, context: Any | None = None):
         """Sample from distribution."""
+        _ = context
         return self.rng.exponential(1 / self.rate)
 
     @classmethod
@@ -124,13 +165,14 @@ class Gamma(Distribution):
 
     @override
     def sample(self, context: Any | None = None) -> float:
+        _ = context
         return self.rng.gamma(self.shape, self.scale)
 
     def fit(cls, data):
-        log_data = np.log(data)
-        mean_data = np.mean(data)
-        theta_hat = np.mean(data * np.log(data)) - mean_data * np.mean(log_data)
-        k_hat = mean_data / theta_hat
+        log_data: float = np.log(data)
+        mean_data: float = np.mean(data)
+        theta_hat: float = np.mean(data * np.log(data)) - mean_data * np.mean(log_data)
+        k_hat: float = mean_data / theta_hat
         return Gamma(shape=k_hat, scale=theta_hat)
 
     @override

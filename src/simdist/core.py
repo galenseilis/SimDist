@@ -1,10 +1,10 @@
 """Simulation-compatible probability distributions."""
 
-from abc import ABC, abstractmethod
-import operator
 import numbers
+import operator
+from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from typing import Any, Callable, override, Self
+from typing import Any, Callable, Self, override
 
 __all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max"]
 
