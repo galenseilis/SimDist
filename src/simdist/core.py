@@ -240,3 +240,21 @@ class Max(Distribution):
     def sample(self, context: Any | None = None) -> None:
         samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return max(samples)
+
+class Range(Distribution):
+    """Distribution takes the range of samples from multiple distributions."""
+
+    def __init__(self, dists: Iterable[Distribution]):
+        self.dists: Iterable[Distribution] = dists
+
+    @override
+    def sample(self, context: Any | None = None) -> None:
+        samples: list[Any] = [dist.sample(context) for dist in self.dists]
+        return max(samples) - min(samples)
+
+class FiniteMixture(Distribution):
+    """Finite mixture distribution.
+
+    Finite convex combination of probability distributions.
+    """
+    # TODO: Implement
