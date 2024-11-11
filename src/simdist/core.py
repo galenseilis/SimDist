@@ -12,8 +12,6 @@ __all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max"]
 class Distribution(ABC):
     """Definition of simulation-compatible distributions."""
 
-    infinite_divisible: bool
-
     @override
     def __repr__(self):
         return f"{self.__class__.__name__}"
@@ -86,34 +84,39 @@ class Distribution(ABC):
     def pdf(self, x: Any) -> float:  # pylint: disable=C0103
         """Probability density function or
         probability mass function."""
+        _ = x
         raise NotImplementedError("Method `pdf` not implemented.")
 
+    # TODO: Look into more specific type.
+    # Type is currently `Any` to allow random elements, not just random variables with expectations.
     def cdf(self, x: Any) -> float:  # pylint: disable=C0103
         """Cumulative distribution function."""
         raise NotImplementedError("Method `cdf` not implemented")
 
     def quantile(self, p: float) -> Any:  # pylint: disable=C0103
         """Quantile function"""
+        _ = p
         raise NotImplementedError("Method `quantile` not implemented.")
 
     def mean(self) -> float:
         """Expected value."""
         raise NotImplementedError("Method `mean` not implemented")
 
+    # TODO: Look into more specific return type.
     def median(self) -> Any:
-        """Median"""
+        """Median."""
         raise NotImplementedError("Method `median` not implemented.")
 
     def mode(self) -> float:
-        """Mode"""
+        """Mode."""
         raise NotImplementedError()
 
     def variance(self) -> float:
-        """Variance"""
+        """Variance."""
         raise NotImplementedError()
 
     def standard_deviation(self) -> float:
-        """Standard deviation"""
+        """Standard deviation."""
         raise NotImplementedError()
 
     def mean_absolute_deviation(self) -> float:
@@ -125,15 +128,16 @@ class Distribution(ABC):
         raise NotImplementedError()
 
     def excess_kurtosis(self) -> float:
-        """Excess kurtosis"""
+        """Excess kurtosis."""
         raise NotImplementedError()
 
     def entropy(self) -> float:
-        """Entropy"""
+        """Entropy."""
         raise NotImplementedError()
 
     def moment_generating_function(self, t: float) -> float:  # pylint: disable=C0103
         """Moment generating function (MGF)."""
+        _ = t
         raise NotImplementedError()
 
     def fisher_information(self):
@@ -141,11 +145,22 @@ class Distribution(ABC):
 
     def characteristic_function(self, t: float) -> float:
         """Characteristic function."""
+        _ = t
         raise NotImplementedError()
 
     def expected_shortfall(self, p: float) -> float:  # pylint: disable=C0103
         """Expected shortfall."""
+        _ = p
         raise NotImplementedError()
+
+    def is_infinitely_divisible(self) -> bool:
+        """Determine whether distribution is infinitely-divisible."""
+        raise NotImplementedError()
+
+    def limit_dist(self, var_limits: dict[str, Any]):
+        """Return limit distribution."""
+        _ = var_limits
+        raise NotImplemented()
 
 
 class Degenerate(Distribution):
@@ -162,6 +177,20 @@ class Degenerate(Distribution):
     def sample(self, context: Any | None = None) -> Any:
         """Sample from distribution."""
         return self.func(context)
+
+
+class Constant(Distribution):
+    def __init__(self, value: Any):
+        self.value: Any = value
+
+    @override
+    def sample(self, context: Any | None = None) -> Any:
+        _ = context
+        return self.value
+
+    @override
+    def is_infinitely_divisible(self) -> bool:
+        return self.value == 0
 
 
 def _dist_cast(obj: Any) -> Distribution:
@@ -241,6 +270,7 @@ class Max(Distribution):
         samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return max(samples)
 
+
 class Range(Distribution):
     """Distribution takes the range of samples from multiple distributions."""
 
@@ -252,9 +282,11 @@ class Range(Distribution):
         samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return max(samples) - min(samples)
 
+
 class FiniteMixture(Distribution):
     """Finite mixture distribution.
 
     Finite convex combination of probability distributions.
     """
+
     # TODO: Implement

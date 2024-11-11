@@ -1,9 +1,9 @@
-from typing import Any, override, Callable
 import warnings
+from typing import Any, Callable, Final, override
 
 from .core import Distribution
 
-__all__ = ["Reject", "is_negative", "outside_interval"]
+__all__: Final[list[str]] = ["Reject", "is_negative", "outside_interval"]
 
 
 class Reject(Distribution):
