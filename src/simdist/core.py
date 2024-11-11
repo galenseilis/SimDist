@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Any, Callable, Self, override
 
-__all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max"]
+__all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max", "Range"]
 
 
 class Distribution(ABC):
@@ -66,34 +66,21 @@ class Distribution(ABC):
         then it will attempt to use it as a transform instead.
         """
 
-        if isinstance(other, Distribution):
-            return Compose(self.__class__, (other,))
+        return Compose(self, (other,))
 
-        try:
-            iter(other)
-            if all(isinstance(d, Distribution) for d in other):
-                return Compose(self.__class__, other)
-        except ValueError as value_error:
-            print(value_error)
 
-        if callable(other):
-            return Transform((self,), other)
-
-        raise ValueError(f"Invalid input {other=}.")
-
-    def pdf(self, x: Any) -> float:  # pylint: disable=C0103
+    def pdf(self, x: float) -> float:  # pylint: disable=C0103
         """Probability density function or
         probability mass function."""
         _ = x
         raise NotImplementedError("Method `pdf` not implemented.")
 
-    # TODO: Look into more specific type.
-    # Type is currently `Any` to allow random elements, not just random variables with expectations.
-    def cdf(self, x: Any) -> float:  # pylint: disable=C0103
+    def cdf(self, x: float) -> float:  # pylint: disable=C0103
         """Cumulative distribution function."""
+        _ = x
         raise NotImplementedError("Method `cdf` not implemented")
 
-    def quantile(self, p: float) -> Any:  # pylint: disable=C0103
+    def quantile(self, p: float) -> float:  # pylint: disable=C0103
         """Quantile function"""
         _ = p
         raise NotImplementedError("Method `quantile` not implemented.")
@@ -102,8 +89,7 @@ class Distribution(ABC):
         """Expected value."""
         raise NotImplementedError("Method `mean` not implemented")
 
-    # TODO: Look into more specific return type.
-    def median(self) -> Any:
+    def median(self) -> float:
         """Median."""
         raise NotImplementedError("Method `median` not implemented.")
 
@@ -160,7 +146,7 @@ class Distribution(ABC):
     def limit_dist(self, var_limits: dict[str, Any]):
         """Return limit distribution."""
         _ = var_limits
-        raise NotImplemented()
+        raise NotImplementedError()
 
 
 class Degenerate(Distribution):
@@ -174,17 +160,17 @@ class Degenerate(Distribution):
         return f"{self.__class__.__name__}({self.func})"
 
     @override
-    def sample(self, context: Any | None = None) -> Any:
+    def sample(self, context: dict[Any, Any] | None = None) -> float | Distribution:
         """Sample from distribution."""
         return self.func(context)
 
 
 class Constant(Distribution):
-    def __init__(self, value: Any):
-        self.value: Any = value
+    def __init__(self, value: float | Distribution):
+        self.value: float | Distribution  = value
 
     @override
-    def sample(self, context: Any | None = None) -> Any:
+    def sample(self, context: Any | None = None) -> float | Distribution:
         _ = context
         return self.value
 
@@ -215,18 +201,18 @@ class Transform(Distribution):
 
     def __init__(
         self,
-        dists: Iterable[Distribution],
-        transform: Callable[[Iterable[Distribution]], Any],
+        dists: tuple[Distribution],
+        transform: Callable[[tuple[Distribution]], Any],
     ):
         self.dists: Iterable[Distribution] = dists
-        self.transform: Callable[[Iterable[Distribution]], Any] = transform
+        self.transform: Callable[[tuple[Distribution]], Any] = transform
 
     @override
     def __repr__(self):
         return f"{self.__class__.__name__}({self.dists}, {self.transform})"
 
     @override
-    def sample(self, context: Any | None = None) -> Any:
+    def sample(self, context: Any | None = None) -> float:
         """Sample from distribution."""
         samples: list[Any] = [dist.sample(context) for dist in self.dists]
         return self.transform(*samples)
@@ -254,8 +240,8 @@ class Min(Distribution):
         self.dists: Iterable[Distribution] = dists
 
     @override
-    def sample(self, context: Any | None = None) -> Any:
-        samples: list[Any] = [dist.sample(context) for dist in self.dists]
+    def sample(self, context: Any | None = None) -> float:
+        samples: list[float] = [dist.sample(context) for dist in self.dists]
         return min(samples)
 
 
@@ -266,8 +252,8 @@ class Max(Distribution):
         self.dists: Iterable[Distribution] = dists
 
     @override
-    def sample(self, context: Any | None = None) -> None:
-        samples: list[Any] = [dist.sample(context) for dist in self.dists]
+    def sample(self, context: Any | None = None) -> float:
+        samples: list[float] = [dist.sample(context) for dist in self.dists]
         return max(samples)
 
 
@@ -278,8 +264,8 @@ class Range(Distribution):
         self.dists: Iterable[Distribution] = dists
 
     @override
-    def sample(self, context: Any | None = None) -> None:
-        samples: list[Any] = [dist.sample(context) for dist in self.dists]
+    def sample(self, context: Any | None = None) -> float:
+        samples: list[float] = [dist.sample(context) for dist in self.dists]
         return max(samples) - min(samples)
 
 
