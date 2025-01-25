@@ -54,11 +54,6 @@ __all__: Final[list[str]] = [
 # TODO: ideal soliton
 # TODO: robust soliton
 
-###########################
-# $2.1.1 INFINITE SUPPORT #
-###########################
-
-
 class Binomial(Distribution):
     def __init__(self, num: int, prob: float, rng: np.random.Generator | None = None):
         self.num: int = num
@@ -74,6 +69,21 @@ class Binomial(Distribution):
     def is_infinitely_divisible(self) -> bool:
         return False
 
+class Empirical(Distribution):
+
+    def __init__(self, rng: np.random.Generator | None = None):
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+        self.support: Any = None
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return self.rng.choice(self.support)
+
+
+###########################
+# $2.1.1 INFINITE SUPPORT #
+###########################
 
 class Geometric(Distribution):
     """Geometric distribution."""
