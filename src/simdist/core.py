@@ -76,37 +76,62 @@ class Distribution(ABC):
         raise NotImplementedError("Method `pdf` not implemented.")
 
     def cdf(self, x: float) -> float:  # pylint: disable=C0103
-        """Cumulative distribution function."""
+        """Cumulative distribution function.
+
+        https://en.wikipedia.org/wiki/Cumulative_distribution_function
+        """
         _ = x
         raise NotImplementedError("Method `cdf` not implemented")
 
     def quantile(self, p: float) -> float:  # pylint: disable=C0103
-        """Quantile function"""
+        """Quantile function.
+
+        https://en.wikipedia.org/wiki/Quantile
+        https://en.wikipedia.org/wiki/Quantile_function
+        """
         _ = p
         raise NotImplementedError("Method `quantile` not implemented.")
 
     def mean(self) -> float:
-        """Expected value."""
+        """Expected value.
+
+        https://en.wikipedia.org/wiki/Expected_value
+        """
         raise NotImplementedError("Method `mean` not implemented")
 
     def median(self) -> float:
-        """Median."""
+        """Median.
+
+        https://en.wikipedia.org/wiki/Median
+        """
         raise NotImplementedError("Method `median` not implemented.")
 
     def mode(self) -> float:
-        """Mode."""
+        """Mode.
+
+        https://en.wikipedia.org/wiki/Mode_(statistics)
+        """
         raise NotImplementedError()
 
     def variance(self) -> float:
-        """Variance."""
+        """Variance.
+
+        https://en.wikipedia.org/wiki/Variance
+        """
         raise NotImplementedError()
 
     def standard_deviation(self) -> float:
-        """Standard deviation."""
+        """Standard deviation.
+
+        https://en.wikipedia.org/wiki/Standard_deviation
+        """
         raise NotImplementedError()
 
-    def mean_absolute_deviation(self) -> float:
-        """Mean absolute deviation (MAD)."""
+    def mean_absolute_difference(self) -> float:
+        """Mean absolute difference (MAD).
+
+        https://en.wikipedia.org/wiki/Mean_absolute_difference
+        """
         raise NotImplementedError()
 
     def skewness(self) -> float:
@@ -140,7 +165,10 @@ class Distribution(ABC):
         raise NotImplementedError()
 
     def is_infinitely_divisible(self) -> bool:
-        """Determine whether distribution is infinitely-divisible."""
+        """Determine whether distribution is infinitely-divisible.
+
+        https://en.wikipedia.org/wiki/Infinite_divisibility_(probability)
+        """
         raise NotImplementedError()
 
     def limit_dist(self, var_limits: dict[str, Any]):

@@ -23,7 +23,7 @@ class Reject(Distribution):
         return f"RejectDistribution({self.dist}, {self.reject})"
 
     @override
-    def sample(self, context: Any | None = None):
+    def sample(self, context: Any | None = None) -> float | Distribution:
         """Rejection sample from distribution."""
         while True:
             candidate = self.dist.sample(context)
@@ -56,13 +56,9 @@ def outside_interval(
 
     Ignores context.
     """
+    _ = context
     if upper is None:
         upper = float("inf")
-    if __debug__:
-        if context is not None:
-            warnings.warn(
-                f"`outside_interval` does not use context, but context was passed."
-            )
     if candidate < lower:
         return True
     if candidate > upper:
