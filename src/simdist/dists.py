@@ -55,6 +55,7 @@ __all__: Final[list[str]] = [
 # TODO: robust soliton
 
 class Binomial(Distribution):
+
     def __init__(self, num: int, prob: float, rng: np.random.Generator | None = None):
         self.num: int = num
         self.prob: float = prob

@@ -21,6 +21,9 @@ class Distribution(ABC):
         """Sample from distribution."""
         ...
 
+    def batch_sample(self, context: dict[Any, Any] | None = None, size: int = 10_000):
+        return [self.sample(context) for _ in range(size)]
+
     def __abs__(self):
         return Transform((self,), operator.abs)
 
@@ -82,6 +85,14 @@ class Distribution(ABC):
         """
         _ = x
         raise NotImplementedError("Method `cdf` not implemented")
+
+    # INFO: https://en.wikipedia.org/wiki/Cumulative_distribution_function#Folded_cumulative_distribution
+    def folded_cdf(self, x: float) -> float:
+        p = self.cdf(x)
+        if p <= 0.5:
+            return p
+        else:
+            return 1 - p
 
     def quantile(self, p: float) -> float:  # pylint: disable=C0103
         """Quantile function.
