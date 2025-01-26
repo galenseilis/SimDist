@@ -40,9 +40,40 @@ __all__: Final[list[str]] = [
 # $2.1.0 FINITE SUPPORT #
 #########################
 
-# TODO: Bernoulli
-# TODO: Rademacher
-# TODO: binomial
+class Bernoulli(Distribution):
+
+    support: list[int] = [0, 1] # INFO: Exhaustive list; not interval.
+
+    def __init__(self, p: float, rng: np.random.Generator | None = None):
+        if p < 0:
+            return ValueError(f"Probability parameter {p=} must be nonnegative.")
+        if p > 1:
+            return ValueError(f"Probability parameter {p=} must be bounded above by one.")
+        self.p: float = p
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None):
+        _ = context
+        self.rng.choice(a=self.support, p=[1 - self.p, self.p])
+
+class Rademacher(Distribution):
+
+    support: list[int] = [-1, 1] # INFO: Exhaustive list; not interval.
+
+    def __init__(self, p: float, rng: np.random.Generator | None = None):
+        if p < 0:
+            return ValueError(f"Probability parameter {p=} must be nonnegative.")
+        if p > 1:
+            return ValueError(f"Probability parameter {p=} must be bounded above by one.")
+        self.p: float = p
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None):
+        _ = context
+        self.rng.choice(a=self.support, p=[1 - self.p, self.p])
+
 # TODO: beta-binomial
 # TODO: discrete uniform
 # TODO: hypergeometric
@@ -79,7 +110,7 @@ class Empirical(Distribution):
     @override
     def sample(self, context: Any | None = None) -> float:
         _ = context
-        return self.rng.choice(self.support)
+        return self.rng.choice(a=self.support)
 
 
 ###########################
@@ -134,6 +165,13 @@ class Poisson(Distribution):
     def __init__(self, rate: float, rng: np.random.Generator | None = None):
         self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
         self.rate: float = rate
+
+    @override
+    def __add__(self, other: Distribution):
+        if isinstance(other, Poisson):
+            return Poisson(self.rate + other.rate)
+        else:
+            return super().__add__(other)
 
     @override
     def sample(self, context: Any | None = None) -> float:
