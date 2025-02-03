@@ -183,6 +183,10 @@ class Distribution(ABC):
         """
         raise NotImplementedError()
 
+    def is_absolutely_continous(self) -> bool:
+        """Determine whether distribution is absolutely continuous."""
+        raise NotImplementedError()
+
     def limit_dist(self, var_limits: dict[str, Any]) -> Any:
         """Return limit distribution."""
         _ = var_limits
