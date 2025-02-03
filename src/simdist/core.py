@@ -164,6 +164,7 @@ class Distribution(ABC):
 
     def fisher_information(self):
         """Fisher information."""
+        raise NotImplementedError()
 
     def characteristic_function(self, t: float) -> float:
         """Characteristic function."""
@@ -182,7 +183,7 @@ class Distribution(ABC):
         """
         raise NotImplementedError()
 
-    def limit_dist(self, var_limits: dict[str, Any]):
+    def limit_dist(self, var_limits: dict[str, Any]) -> Any:
         """Return limit distribution."""
         _ = var_limits
         raise NotImplementedError()

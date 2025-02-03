@@ -75,6 +75,28 @@ class Rademacher(Distribution):
         self.rng.choice(a=self.support, p=[1 - self.p, self.p])
 
 # TODO: beta-binomial
+
+class BetaBinomial(Distribution):
+
+    def __init__(self, n: int, alpha:float , beta: float, rng: np.random.Generator | None = None):
+        if n != int(n):
+            raise ValueError(f"Parameter {n=} must be an integer")
+        if n < 0:
+            raise ValueError(f"Parameter {n=} must be non-negative.")
+        if alpha <= 0:
+            raise ValueError(f"Parameter {alpha=} must be positive.")
+        if beta <= 0:
+            raise ValueError(f"Parameter {beta=} must be positive.")
+        self.n: int = n 
+        self.alpha: float = alpha
+        self.beta: float = beta
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    def sample(self, context: Any | None = None):
+        _ = context
+        p = self.rng.beta(self.alpha, self.beta)
+        return self.rng.binomial(self.n, p)
+
 # TODO: discrete uniform
 # TODO: hypergeometric
 # TODO: negative hypergeometric
@@ -159,8 +181,6 @@ class NegativeBinomial(Distribution):
 
 class Poisson(Distribution):
     """Poisson distribution."""
-
-    infinite_divisible: bool = True
 
     def __init__(self, rate: float, rng: np.random.Generator | None = None):
         self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
