@@ -55,7 +55,7 @@ class Bernoulli(Distribution):
     @override
     def sample(self, context: Any | None = None):
         _ = context
-        self.rng.choice(a=self.support, p=[1 - self.p, self.p])
+        return self.rng.choice(a=self.support, p=[1 - self.p, self.p])
 
 class Rademacher(Distribution):
 
@@ -72,7 +72,7 @@ class Rademacher(Distribution):
     @override
     def sample(self, context: Any | None = None):
         _ = context
-        self.rng.choice(a=self.support, p=[1 - self.p, self.p])
+        return self.rng.choice(a=self.support, p=[1 - self.p, self.p])
 
 # TODO: beta-binomial
 
@@ -181,6 +181,7 @@ class NegativeBinomial(Distribution):
 
 class Poisson(Distribution):
     """Poisson distribution."""
+
 
     def __init__(self, rate: float, rng: np.random.Generator | None = None):
         self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
@@ -422,6 +423,33 @@ class Gamma(Distribution):
     def is_infinitely_divisible(self) -> bool:
         return True
 
+class VonMises(Distribution):
+
+    def __init__(self, mu: float, kappa: float, rng: np.random.Generator | None = None):
+
+        if kappa < 0:
+            return ValueError(f"Probability parameter {kappa=} must be nonnegative.")
+
+        self.mu: float = mu
+        self.kappa: float = kappa
+        self.rng: np.random.Generator | None = rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return self.rng.vonmises(self.mu, self.kappa)
+
+    @override
+    def mean(self) -> float:
+        return self.mu
+
+    @override
+    def median(self) -> float:
+        return self.mu
+
+    @override
+    def mode(self) -> float:
+        return self.mu
 
 ##############################
 # MULTIVARIATE DISTRIBUTIONS #
