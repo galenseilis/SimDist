@@ -25,6 +25,7 @@ __all__: Final[list[str]] = [
     # Discrete, finite support.
     "Bernoulli",
     "Rademacher",
+    "Categorical",
     "BetaBinomial",
     "Binomial",
     "Empirical",
@@ -39,12 +40,25 @@ __all__: Final[list[str]] = [
     "Geometric",
     "NegativeBinomial",
     "Poisson",
+    "Zipf",
     "IdealSoliton",
     "RobustSoliton",
     # Absolutely continuous.
     "ContinuousUniform",
+    "Triangular",
+    "Normal",
+    "LogNormal",
     "Exponential",
+    "Laplace",
+    "Logistic",
+    "Cauchy",
     "Gamma",
+    "Beta",
+    "ChiSquared",
+    "StudentT",
+    "Weibull",
+    "Rayleigh",
+    "Pareto",
     "VonMises",
 ]
 
@@ -600,7 +614,75 @@ class Benford(Distribution):
         return False
 
 
-###########################
+class Categorical(Distribution):
+    """Categorical distribution over an explicit, finite support.
+
+    A generalisation of :class:`Bernoulli`/:class:`Rademacher` to more than
+    two outcomes. Probabilities are normalised to sum to one.
+    """
+
+    def __init__(
+        self,
+        probabilities: Sequence[float],
+        support: Sequence[Any] | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        probs = [float(p) for p in probabilities]
+        if len(probs) == 0:
+            raise ValueError("A categorical distribution needs at least one category.")
+        if any(p < 0 for p in probs):
+            raise ValueError(
+                f"Probabilities must be non-negative, got {probabilities=}."
+            )
+        total = float(sum(probs))
+        if total <= 0:
+            raise ValueError("Probabilities must sum to a positive value.")
+        self.probabilities: list[float] = [p / total for p in probs]
+        if support is None:
+            self.support: list[Any] = list(range(len(probs)))
+        else:
+            self.support = list(support)
+            if len(self.support) != len(self.probabilities):
+                raise ValueError(
+                    f"len(support)={len(self.support)} must equal "
+                    f"len(probabilities)={len(self.probabilities)}."
+                )
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.probabilities}, {self.support})"
+
+    @override
+    def sample(self, context: Any | None = None) -> Any:
+        _ = context
+        index = int(self.rng.choice(len(self.support), p=self.probabilities))
+        return self.support[index]
+
+    @override
+    def mean(self) -> float:
+        return float(np.average(self.support, weights=self.probabilities))
+
+    @override
+    def variance(self) -> float:
+        mean = self.mean()
+        return float(
+            sum(
+                p * (float(s) - mean) ** 2
+                for p, s in zip(self.probabilities, self.support, strict=True)
+            )
+        )
+
+    @override
+    def mode(self) -> Any:
+        return self.support[int(np.argmax(self.probabilities))]
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return False
+
+
+##########################################
 # $2.1.1 INFINITE SUPPORT #
 ###########################
 
@@ -777,6 +859,32 @@ class RobustSoliton(Distribution):
     def sample(self, context: Any | None = None) -> int:
         _ = context
         return int(self.rng.choice(self._degrees, p=self._probs))
+
+
+class Zipf(Distribution):
+    """Zipf (zeta) distribution on the positive integers.
+
+    ``P(k)`` is proportional to ``k ** -alpha`` for ``k = 1, 2, ...``.
+    """
+
+    def __init__(self, alpha: float, rng: np.random.Generator | None = None) -> None:
+        if alpha <= 1:
+            raise ValueError(f"Parameter alpha={alpha} must be greater than 1.")
+        self.alpha: float = alpha
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> int:
+        _ = context
+        return int(self.rng.zipf(self.alpha))
+
+    @override
+    def mode(self) -> int:
+        return 1
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return False
 
 
 ##########################################
@@ -1094,6 +1202,763 @@ class VonMises(Distribution):
     @override
     def mode(self) -> float:
         return self.mu
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Triangular(Distribution):
+    """Triangular distribution on ``[low, high]`` with peak at ``mode``."""
+
+    def __init__(
+        self,
+        low: float = 0.0,
+        high: float = 1.0,
+        mode: float | None = None,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if high <= low:
+            raise ValueError(f"high={high} must be greater than low={low}.")
+        if mode is None:
+            mode = (low + high) / 2
+        if not low <= mode <= high:
+            raise ValueError(f"mode={mode} must lie within [{low}, {high}].")
+        self.low: float = low
+        self.high: float = high
+        self._mode: float = mode
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(low={self.low}, high={self.high}, "
+            f"mode={self._mode})"
+        )
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.triangular(self.low, self._mode, self.high))
+
+    @override
+    def pdf(self, x: float) -> float:
+        a, b, c = self.low, self.high, self._mode
+        if x < a or x > b:
+            return 0.0
+        if c == a:
+            return 2 * (b - x) / (b - a) ** 2
+        if c == b:
+            return 2 * (x - a) / (b - a) ** 2
+        if x < c:
+            return 2 * (x - a) / ((b - a) * (c - a))
+        if x > c:
+            return 2 * (b - x) / ((b - a) * (b - c))
+        return 2 / (b - a)
+
+    @override
+    def cdf(self, x: float) -> float:
+        a, b, c = self.low, self.high, self._mode
+        if x <= a:
+            return 0.0
+        if x >= b:
+            return 1.0
+        if c == a:
+            return 1 - (b - x) ** 2 / (b - a) ** 2
+        if c == b:
+            return (x - a) ** 2 / (b - a) ** 2
+        if x <= c:
+            return (x - a) ** 2 / ((b - a) * (c - a))
+        return 1 - (b - x) ** 2 / ((b - a) * (b - c))
+
+    @override
+    def mean(self) -> float:
+        return (self.low + self.high + self._mode) / 3
+
+    @override
+    def variance(self) -> float:
+        a, b, c = self.low, self.high, self._mode
+        return (a**2 + b**2 + c**2 - a * b - a * c - b * c) / 18
+
+    @override
+    def median(self) -> float:
+        a, b, c = self.low, self.high, self._mode
+        if c >= (a + b) / 2:
+            return a + math.sqrt((b - a) * (c - a) / 2)
+        return b - math.sqrt((b - a) * (b - c) / 2)
+
+    @override
+    def mode(self) -> float:
+        return self._mode
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Normal(Distribution):
+    """Normal (Gaussian) distribution."""
+
+    def __init__(
+        self,
+        mu: float = 0.0,
+        sigma: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if sigma <= 0:
+            raise ValueError(f"sigma={sigma} must be positive.")
+        self.mu: float = mu
+        self.sigma: float = sigma
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mu={self.mu}, sigma={self.sigma})"
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.normal(self.mu, self.sigma))
+
+    @override
+    def pdf(self, x: float) -> float:
+        z = (x - self.mu) / self.sigma
+        return math.exp(-0.5 * z * z) / (self.sigma * math.sqrt(2 * math.pi))
+
+    @override
+    def cdf(self, x: float) -> float:
+        z = (x - self.mu) / (self.sigma * math.sqrt(2))
+        return 0.5 * (1 + math.erf(z))
+
+    @override
+    def mean(self) -> float:
+        return self.mu
+
+    @override
+    def median(self) -> float:
+        return self.mu
+
+    @override
+    def mode(self) -> float:
+        return self.mu
+
+    @override
+    def variance(self) -> float:
+        return self.sigma**2
+
+    @override
+    def standard_deviation(self) -> float:
+        return self.sigma
+
+    @override
+    def skewness(self) -> float:
+        return 0.0
+
+    @override
+    def excess_kurtosis(self) -> float:
+        return 0.0
+
+    @override
+    def entropy(self) -> float:
+        return 0.5 * math.log(2 * math.pi * math.e * self.sigma**2)
+
+    @override
+    def is_infinitely_divisible(self) -> bool:
+        return True
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class LogNormal(Distribution):
+    """Log-normal distribution: ``X = exp(N(mu, sigma ** 2))``."""
+
+    def __init__(
+        self,
+        mu: float = 0.0,
+        sigma: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if sigma <= 0:
+            raise ValueError(f"sigma={sigma} must be positive.")
+        self.mu: float = mu
+        self.sigma: float = sigma
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.lognormal(self.mu, self.sigma))
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x <= 0:
+            return 0.0
+        log_x = math.log(x)
+        z = (log_x - self.mu) / self.sigma
+        return math.exp(-0.5 * z * z) / (x * self.sigma * math.sqrt(2 * math.pi))
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x <= 0:
+            return 0.0
+        z = (math.log(x) - self.mu) / (self.sigma * math.sqrt(2))
+        return 0.5 * math.erfc(-z)
+
+    @override
+    def mean(self) -> float:
+        return math.exp(self.mu + self.sigma**2 / 2)
+
+    @override
+    def variance(self) -> float:
+        return (math.exp(self.sigma**2) - 1) * math.exp(2 * self.mu + self.sigma**2)
+
+    @override
+    def median(self) -> float:
+        return math.exp(self.mu)
+
+    @override
+    def mode(self) -> float:
+        return math.exp(self.mu - self.sigma**2)
+
+    @override
+    def skewness(self) -> float:
+        return (math.exp(self.sigma**2) + 2) * math.sqrt(math.exp(self.sigma**2) - 1)
+
+    @override
+    def excess_kurtosis(self) -> float:
+        s2 = self.sigma**2
+        return math.exp(4 * s2) + 2 * math.exp(3 * s2) + 3 * math.exp(2 * s2) - 6
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Laplace(Distribution):
+    """Laplace (double exponential) distribution."""
+
+    def __init__(
+        self,
+        location: float = 0.0,
+        scale: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.location: float = location
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.laplace(self.location, self.scale))
+
+    @override
+    def pdf(self, x: float) -> float:
+        return math.exp(-abs(x - self.location) / self.scale) / (2 * self.scale)
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x < self.location:
+            return 0.5 * math.exp((x - self.location) / self.scale)
+        return 1 - 0.5 * math.exp(-(x - self.location) / self.scale)
+
+    @override
+    def mean(self) -> float:
+        return self.location
+
+    @override
+    def median(self) -> float:
+        return self.location
+
+    @override
+    def mode(self) -> float:
+        return self.location
+
+    @override
+    def variance(self) -> float:
+        return 2 * self.scale**2
+
+    @override
+    def skewness(self) -> float:
+        return 0.0
+
+    @override
+    def excess_kurtosis(self) -> float:
+        return 3.0
+
+    @override
+    def entropy(self) -> float:
+        return 1 + math.log(2 * self.scale)
+
+    @override
+    def is_infinitely_divisible(self) -> bool:
+        return True
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Logistic(Distribution):
+    """Logistic distribution."""
+
+    def __init__(
+        self,
+        location: float = 0.0,
+        scale: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.location: float = location
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.logistic(self.location, self.scale))
+
+    @override
+    def pdf(self, x: float) -> float:
+        z = abs(x - self.location) / self.scale
+        e = math.exp(-z)
+        return e / (self.scale * (1 + e) ** 2)
+
+    @override
+    def cdf(self, x: float) -> float:
+        z = (x - self.location) / self.scale
+        if z >= 0:
+            return 1 / (1 + math.exp(-z))
+        e = math.exp(z)
+        return e / (1 + e)
+
+    @override
+    def mean(self) -> float:
+        return self.location
+
+    @override
+    def median(self) -> float:
+        return self.location
+
+    @override
+    def mode(self) -> float:
+        return self.location
+
+    @override
+    def variance(self) -> float:
+        return math.pi**2 * self.scale**2 / 3
+
+    @override
+    def skewness(self) -> float:
+        return 0.0
+
+    @override
+    def excess_kurtosis(self) -> float:
+        return 1.2
+
+    @override
+    def entropy(self) -> float:
+        return math.log(self.scale) + 2
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Cauchy(Distribution):
+    """Cauchy (Lorentz) distribution.
+
+    The mean and variance are undefined, so those methods are intentionally
+    left unimplemented.
+    """
+
+    def __init__(
+        self,
+        location: float = 0.0,
+        scale: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.location: float = location
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.standard_cauchy() * self.scale + self.location)
+
+    @override
+    def pdf(self, x: float) -> float:
+        z = (x - self.location) / self.scale
+        return 1 / (math.pi * self.scale * (1 + z**2))
+
+    @override
+    def cdf(self, x: float) -> float:
+        z = (x - self.location) / self.scale
+        return 0.5 + math.atan(z) / math.pi
+
+    @override
+    def median(self) -> float:
+        return self.location
+
+    @override
+    def mode(self) -> float:
+        return self.location
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Beta(Distribution):
+    """Beta distribution on the unit interval ``[0, 1]``."""
+
+    def __init__(
+        self,
+        alpha: float,
+        beta: float,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if alpha <= 0:
+            raise ValueError(f"Parameter alpha={alpha} must be positive.")
+        if beta <= 0:
+            raise ValueError(f"Parameter beta={beta} must be positive.")
+        self.alpha: float = alpha
+        self.beta: float = beta
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.beta(self.alpha, self.beta))
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x < 0 or x > 1:
+            return 0.0
+        log_beta = (
+            math.lgamma(self.alpha)
+            + math.lgamma(self.beta)
+            - math.lgamma(self.alpha + self.beta)
+        )
+        if x == 0:
+            return 0.0 if self.alpha > 1 else float("inf")
+        if x == 1:
+            return 0.0 if self.beta > 1 else float("inf")
+        exponent = (self.alpha - 1) * math.log(x) + (self.beta - 1) * math.log1p(-x)
+        return math.exp(exponent - log_beta)
+
+    @override
+    def mean(self) -> float:
+        return self.alpha / (self.alpha + self.beta)
+
+    @override
+    def variance(self) -> float:
+        a, b = self.alpha, self.beta
+        return a * b / ((a + b) ** 2 * (a + b + 1))
+
+    @override
+    def mode(self) -> float:
+        a, b = self.alpha, self.beta
+        if a > 1 and b > 1:
+            return (a - 1) / (a + b - 2)
+        if a <= 1 < b:
+            return 0.0
+        if a > 1 and b <= 1:
+            return 1.0
+        raise NotImplementedError("The beta distribution has no unique mode here.")
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class ChiSquared(Distribution):
+    """Chi-squared distribution with ``df`` degrees of freedom."""
+
+    def __init__(self, df: float, rng: np.random.Generator | None = None) -> None:
+        if df <= 0:
+            raise ValueError(f"df={df} must be positive.")
+        self.df: float = df
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.chisquare(self.df))
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x <= 0:
+            return 0.0
+        k = self.df / 2
+        return math.exp(
+            (k - 1) * math.log(x) - x / 2 - k * math.log(2) - math.lgamma(k)
+        )
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x <= 0:
+            return 0.0
+        return _regularized_lower_incomplete_gamma(self.df / 2, x / 2)
+
+    @override
+    def mean(self) -> float:
+        return self.df
+
+    @override
+    def variance(self) -> float:
+        return 2 * self.df
+
+    @override
+    def median(self) -> float:
+        return _gamma_median(self.df / 2, 2.0)
+
+    @override
+    def mode(self) -> float:
+        return max(self.df - 2, 0.0)
+
+    @override
+    def skewness(self) -> float:
+        return math.sqrt(8 / self.df)
+
+    @override
+    def excess_kurtosis(self) -> float:
+        return 12 / self.df
+
+    @override
+    def is_infinitely_divisible(self) -> bool:
+        return True
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class StudentT(Distribution):
+    """Student's t distribution with ``df`` degrees of freedom."""
+
+    def __init__(self, df: float, rng: np.random.Generator | None = None) -> None:
+        if df <= 0:
+            raise ValueError(f"df={df} must be positive.")
+        self.df: float = df
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.standard_t(self.df))
+
+    @override
+    def pdf(self, x: float) -> float:
+        df = self.df
+        log_norm = (
+            math.lgamma((df + 1) / 2)
+            - math.lgamma(df / 2)
+            - 0.5 * math.log(df * math.pi)
+        )
+        return math.exp(log_norm - (self.df + 1) / 2 * math.log1p(x**2 / self.df))
+
+    @override
+    def mean(self) -> float:
+        if self.df > 1:
+            return 0.0
+        raise ValueError(f"The mean is undefined for df={self.df} <= 1.")
+
+    @override
+    def variance(self) -> float:
+        if self.df > 2:
+            return self.df / (self.df - 2)
+        if self.df > 1:
+            return float("inf")
+        raise ValueError(f"The variance is undefined for df={self.df} <= 1.")
+
+    @override
+    def median(self) -> float:
+        return 0.0
+
+    @override
+    def mode(self) -> float:
+        return 0.0
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Weibull(Distribution):
+    """Weibull distribution with ``shape`` and ``scale``."""
+
+    def __init__(
+        self,
+        shape: float,
+        scale: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if shape <= 0:
+            raise ValueError(f"shape={shape} must be positive.")
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.shape: float = shape
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.weibull(self.shape) * self.scale)
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x < 0:
+            return 0.0
+        k, scale = self.shape, self.scale
+        z = x / scale
+        return (k / scale) * z ** (k - 1) * math.exp(-(z**k))
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x < 0:
+            return 0.0
+        return 1 - math.exp(-((x / self.scale) ** self.shape))
+
+    @override
+    def mean(self) -> float:
+        return self.scale * math.gamma(1 + 1 / self.shape)
+
+    @override
+    def variance(self) -> float:
+        k = self.shape
+        return self.scale**2 * (math.gamma(1 + 2 / k) - math.gamma(1 + 1 / k) ** 2)
+
+    @override
+    def median(self) -> float:
+        return self.scale * math.log(2) ** (1 / self.shape)
+
+    @override
+    def mode(self) -> float:
+        k = self.shape
+        if k > 1:
+            return self.scale * ((k - 1) / k) ** (1 / k)
+        return 0.0
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Rayleigh(Distribution):
+    """Rayleigh distribution with scale parameter ``scale``."""
+
+    def __init__(
+        self, scale: float = 1.0, rng: np.random.Generator | None = None
+    ) -> None:
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.rng.rayleigh(self.scale))
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x < 0:
+            return 0.0
+        s = self.scale
+        return (x / s**2) * math.exp(-(x**2) / (2 * s**2))
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x < 0:
+            return 0.0
+        return 1 - math.exp(-(x**2) / (2 * self.scale**2))
+
+    @override
+    def mean(self) -> float:
+        return self.scale * math.sqrt(math.pi / 2)
+
+    @override
+    def variance(self) -> float:
+        return (2 - math.pi / 2) * self.scale**2
+
+    @override
+    def median(self) -> float:
+        return self.scale * math.sqrt(2 * math.log(2))
+
+    @override
+    def mode(self) -> float:
+        return self.scale
+
+    @override
+    def is_absolutely_continuous(self) -> bool:
+        return True
+
+
+class Pareto(Distribution):
+    """Pareto (type I) distribution with tail index ``shape`` and ``scale``."""
+
+    def __init__(
+        self,
+        shape: float,
+        scale: float = 1.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        if shape <= 0:
+            raise ValueError(f"shape={shape} must be positive.")
+        if scale <= 0:
+            raise ValueError(f"scale={scale} must be positive.")
+        self.shape: float = shape
+        self.scale: float = scale
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def sample(self, context: Any | None = None) -> float:
+        _ = context
+        return float(self.scale * (1 + self.rng.pareto(self.shape)))
+
+    @override
+    def pdf(self, x: float) -> float:
+        if x < self.scale:
+            return 0.0
+        a, xm = self.shape, self.scale
+        return a * xm**a / x ** (a + 1)
+
+    @override
+    def cdf(self, x: float) -> float:
+        if x < self.scale:
+            return 0.0
+        return 1 - (self.scale / x) ** self.shape
+
+    @override
+    def mean(self) -> float:
+        if self.shape > 1:
+            return self.shape * self.scale / (self.shape - 1)
+        return float("inf")
+
+    @override
+    def variance(self) -> float:
+        a = self.shape
+        if a > 2:
+            return self.scale**2 * a / ((a - 1) ** 2 * (a - 2))
+        return float("inf")
+
+    @override
+    def median(self) -> float:
+        return self.scale * 2 ** (1 / self.shape)
+
+    @override
+    def mode(self) -> float:
+        return self.scale
 
     @override
     def is_absolutely_continuous(self) -> bool:

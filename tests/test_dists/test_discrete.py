@@ -394,3 +394,66 @@ def test_robust_soliton_invalid():
         dists.RobustSoliton(10, c=0.0)
     with pytest.raises(ValueError):
         dists.RobustSoliton(10, delta=1.5)
+
+
+# --------------------------------------------------------------------------- #
+# Categorical
+# --------------------------------------------------------------------------- #
+def test_categorical_frequencies_and_moments():
+    dist = dists.Categorical(
+        [0.1, 0.2, 0.7], support=[0, 1, 2], rng=np.random.default_rng(0)
+    )
+    xs = draw(dist)
+    assert set(np.unique(xs)) <= {0, 1, 2}
+    assert (xs == 2).mean() == pytest.approx(0.7, abs=0.02)
+    assert dist.mean() == pytest.approx(1.6)
+    assert dist.variance() == pytest.approx(0.44)
+    assert dist.mode() == 2
+    assert not dist.is_absolutely_continuous()
+
+
+def test_categorical_normalises_weights():
+    dist = dists.Categorical([1.0, 3.0])
+    assert dist.probabilities == pytest.approx([0.25, 0.75])
+    assert dist.support == [0, 1]
+
+
+def test_categorical_arbitrary_support():
+    dist = dists.Categorical([0.5, 0.5], support=["heads", "tails"])
+    xs = draw(dist)
+    assert set(np.unique(xs)) <= {"heads", "tails"}
+
+
+def test_categorical_invalid():
+    with pytest.raises(ValueError):
+        dists.Categorical([])
+    with pytest.raises(ValueError):
+        dists.Categorical([0.5, -0.5])
+    with pytest.raises(ValueError):
+        dists.Categorical([0.0, 0.0])
+    with pytest.raises(ValueError):
+        dists.Categorical([0.5, 0.5], support=[1, 2, 3])
+
+
+# --------------------------------------------------------------------------- #
+# Zipf
+# --------------------------------------------------------------------------- #
+def test_zipf_support_and_mode():
+    dist = dists.Zipf(2.0, np.random.default_rng(0))
+    xs = draw(dist)
+    assert xs.min() >= 1
+    assert dist.mode() == 1
+    assert not dist.is_absolutely_continuous()
+
+
+def test_zipf_favours_one():
+    dist = dists.Zipf(3.0, np.random.default_rng(0))
+    xs = draw(dist)
+    # The mode at 1 should dominate under a steep exponent.
+    assert (xs == 1).mean() > 0.8
+
+
+@pytest.mark.parametrize("alpha", [1.0, 0.5, -2.0])
+def test_zipf_invalid(alpha):
+    with pytest.raises(ValueError):
+        dists.Zipf(alpha)
