@@ -1,5 +1,6 @@
 import warnings
-from typing import Any, Callable, Final, override
+from collections.abc import Callable
+from typing import Any, Final, override
 
 from .core import Distribution
 
@@ -20,7 +21,7 @@ class Reject(Distribution):
 
     @override
     def __repr__(self):
-        return f"RejectDistribution({self.dist}, {self.reject})"
+        return f"{self.__class__.__name__}({self.dist}, {self.reject})"
 
     @override
     def sample(self, context: Any | None = None) -> float | Distribution:
@@ -39,7 +40,8 @@ def is_negative(candidate: float, context: Any | None = None) -> bool:  # pylint
     if __debug__:
         if context is not None:
             warnings.warn(
-                f"`is_negative` does not use context, but context was passed."
+                "`is_negative` does not use context, but context was passed.",
+                stacklevel=2,
             )
     if candidate < 0:
         return True
@@ -48,12 +50,15 @@ def is_negative(candidate: float, context: Any | None = None) -> bool:  # pylint
 
 def outside_interval(
     candidate: float,
+    context: Any | None = None,  # pylint: disable=W0613
     lower: float = 0,
     upper: float | None = None,
-    context: Any | None = None,
-) -> bool:  # pylint: disable=W0613
+) -> bool:
     """Truncate candidates to an interval.
 
+    The signature matches the ``reject(candidate, context)`` calling convention
+    used by :class:`Reject`, so it can be passed directly or via
+    :func:`functools.partial` with the ``lower``/``upper`` keyword arguments.
     Ignores context.
     """
     _ = context

@@ -2,11 +2,24 @@
 
 import numbers
 import operator
+import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from typing import Any, Callable, Self, override
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Self, override
 
-__all__ = ["Distribution", "Degenerate", "Transform", "Compose", "Min", "Max", "Range"]
+import numpy as np
+
+__all__ = [
+    "Distribution",
+    "Degenerate",
+    "Constant",
+    "Transform",
+    "Compose",
+    "Min",
+    "Max",
+    "Range",
+    "FiniteMixture",
+]
 
 
 class Distribution(ABC):
@@ -55,22 +68,27 @@ class Distribution(ABC):
         dist = _dist_cast(other)
         return Transform((self, dist), operator.truediv)
 
-    def __call__(self, other: Self):
-        """Overloaded call method.
+    def __call__(self, other: Any):
+        """Compose this distribution's class with sampled parameters.
 
-        If `other` is of type `Distribution`, or is an iterable containing
-        only elements of type `Distribution`, then it will attempt to
-        compose the distributions. Note that this may fail silently until
-        a sample is taken from the resulting distribution if the number of
-        parameters in the class of `self` does not match the number of distributions
-        representing in `other`.
-
-        If the above is not true but other is nonthesless callable,
-        then it will attempt to use it as a transform instead.
+        If ``other`` is a :class:`Distribution`, or an iterable of
+        distributions, a :class:`Compose` distribution is returned that
+        samples parameters from ``other`` and rebuilds ``type(self)`` from
+        them. If ``other`` is a callable, it is instead applied as a
+        :class:`Transform`.
         """
-
-        return Compose(self, (other,))
-
+        if isinstance(other, Distribution):
+            return Compose(type(self), (other,))
+        if isinstance(other, Iterable) and not isinstance(other, (str, bytes)):
+            components = tuple(other)
+            if all(isinstance(component, Distribution) for component in components):
+                return Compose(type(self), components)
+        if callable(other):
+            return Transform((self,), other)
+        raise TypeError(
+            f"Cannot compose {self!r} with {other!r}; expected a Distribution, "
+            "an iterable of Distributions, or a callable."
+        )
 
     def pdf(self, x: float) -> float:  # pylint: disable=C0103
         """Probability density function or
@@ -183,9 +201,19 @@ class Distribution(ABC):
         """
         raise NotImplementedError()
 
-    def is_absolutely_continous(self) -> bool:
+    def is_absolutely_continuous(self) -> bool:
         """Determine whether distribution is absolutely continuous."""
         raise NotImplementedError()
+
+    def is_absolutely_continous(self) -> bool:
+        """Deprecated misspelling of :meth:`is_absolutely_continuous`."""
+        warnings.warn(
+            "`is_absolutely_continous` is misspelled; use "
+            "`is_absolutely_continuous` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.is_absolutely_continuous()
 
     def limit_dist(self, var_limits: dict[str, Any]) -> Any:
         """Return limit distribution."""
@@ -211,12 +239,28 @@ class Degenerate(Distribution):
 
 class Constant(Distribution):
     def __init__(self, value: float | Distribution):
-        self.value: float | Distribution  = value
+        self.value: float | Distribution = value
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.value})"
 
     @override
     def sample(self, context: Any | None = None) -> float | Distribution:
         _ = context
         return self.value
+
+    @override
+    def mean(self) -> float:
+        if isinstance(self.value, numbers.Number):
+            return float(self.value)
+        return self.value.mean()
+
+    @override
+    def variance(self) -> float:
+        if isinstance(self.value, numbers.Number):
+            return 0.0
+        return self.value.variance()
 
     @override
     def is_infinitely_divisible(self) -> bool:
@@ -238,18 +282,18 @@ def _dist_cast(obj: Any) -> Distribution:
 
 
 class Transform(Distribution):
-    """A distribution that combines the samples of two or more other distributions via an operator.
+    """Combines samples of two or more distributions via an operator.
 
     This implicitly induces a change of variables.
     """
 
     def __init__(
         self,
-        dists: tuple[Distribution],
-        transform: Callable[[tuple[Distribution]], Any],
+        dists: tuple[Distribution, ...],
+        transform: Callable[..., Any],
     ):
         self.dists: Iterable[Distribution] = dists
-        self.transform: Callable[[tuple[Distribution]], Any] = transform
+        self.transform: Callable[..., Any] = transform
 
     @override
     def __repr__(self):
@@ -265,9 +309,13 @@ class Transform(Distribution):
 class Compose(Distribution):
     """Composite distribution."""
 
-    def __init__(self, dist_cls: Distribution, dists: Iterable[Distribution]):
-        self.dist_cls: Distribution = dist_cls
+    def __init__(self, dist_cls: type[Distribution], dists: Iterable[Distribution]):
+        self.dist_cls: type[Distribution] = dist_cls
         self.dists: Iterable[Distribution] = dists
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.dist_cls}, {self.dists})"
 
     @override
     def sample(self, context: Any | None = None) -> Any:
@@ -317,6 +365,55 @@ class FiniteMixture(Distribution):
     """Finite mixture distribution.
 
     Finite convex combination of probability distributions.
+
+    Sampling draws a component index according to ``weights`` and then
+    samples from the selected component.
     """
 
-    # TODO: Implement
+    def __init__(
+        self,
+        weights: Sequence[float],
+        dists: Sequence[Distribution],
+        rng: np.random.Generator | None = None,
+    ):
+        if len(weights) != len(dists):
+            raise ValueError(f"{len(weights)=} must equal {len(dists)=}.")
+        if len(dists) == 0:
+            raise ValueError("A finite mixture requires at least one component.")
+        if any(w < 0 for w in weights):
+            raise ValueError(f"Mixture weights must be non-negative, got {weights=}.")
+        total = float(sum(weights))
+        if total <= 0:
+            raise ValueError(
+                f"Mixture weights must sum to a positive value, got {weights=}."
+            )
+        self.weights: list[float] = [w / total for w in weights]
+        self.dists: list[Distribution] = list(dists)
+        self.rng: np.random.Generator = np.random.default_rng() if rng is None else rng
+
+    @override
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.weights}, {self.dists})"
+
+    @override
+    def sample(self, context: Any | None = None) -> Any:
+        """Sample from the mixture."""
+        index = int(self.rng.choice(len(self.dists), p=self.weights))
+        return self.dists[index].sample(context)
+
+    @override
+    def mean(self) -> float:
+        """Expected value, via the law of total expectation."""
+        components = []
+        for weight, dist in zip(self.weights, self.dists, strict=True):
+            components.append(weight * dist.mean())
+        return float(sum(components))
+
+    @override
+    def variance(self) -> float:
+        """Variance, via the law of total variance."""
+        mean = self.mean()
+        components = []
+        for weight, dist in zip(self.weights, self.dists, strict=True):
+            components.append(weight * (dist.variance() + (dist.mean() - mean) ** 2))
+        return float(sum(components))
